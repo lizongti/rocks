@@ -22,22 +22,18 @@ Caveats: This function returns true for classes.
     assert(instanceof(Emitter, Object))
 ]]
 function core.instanceof(obj, class)
-  if type(obj) ~= 'table' or obj.meta == nil or not class then
-    return false
-  end
-  if obj.meta.__index == class then
-    return true
-  end
-  local meta = obj.meta
-  while meta do
-    if meta.super == class then
-      return true
-    elseif meta.super == nil then
-      return false
+    if type(obj) ~= 'table' or obj.meta == nil or not class then return false end
+    if obj.meta.__index == class then return true end
+    local meta = obj.meta
+    while meta do
+        if meta.super == class then
+            return true
+        elseif meta.super == nil then
+            return false
+        end
+        meta = meta.super.meta
     end
-    meta = meta.super.meta
-  end
-  return false
+    return false
 end
 
 --------------------------------------------------------------------------------
@@ -52,9 +48,9 @@ Object.meta = {__index = Object}
 
 -- Create a new instance of this object
 function Object:create()
-  local meta = rawget(self, "meta")
-  if not meta then error("Cannot inherit from instance object") end
-  return setmetatable({}, meta)
+    local meta = rawget(self, "meta")
+    if not meta then error("Cannot inherit from instance object") end
+    return setmetatable({}, meta)
 end
 
 --[[
@@ -72,11 +68,9 @@ Creates a new instance and calls `obj:initialize(...)` if it exists.
     p(rect:getArea())
 ]]
 function Object:new(...)
-  local obj = self:create()
-  if type(obj.initialize) == "function" then
-    obj:initialize(...)
-  end
-  return obj
+    local obj = self:create()
+    if type(obj.initialize) == "function" then obj:initialize(...) end
+    return obj
 end
 
 --[[
@@ -90,17 +84,15 @@ Creates a new sub-class.
 ]]
 
 function Object:extend()
-  local obj = self:create()
-  local meta = {}
-  -- move the meta methods defined in our ancestors meta into our own
-  --to preserve expected behavior in children (like __tostring, __add, etc)
-  for k, v in pairs(self.meta) do
-    meta[k] = v
-  end
-  meta.__index = obj
-  meta.super=self
-  obj.meta = meta
-  return obj
+    local obj = self:create()
+    local meta = {}
+    -- move the meta methods defined in our ancestors meta into our own
+    -- to preserve expected behavior in children (like __tostring, __add, etc)
+    for k, v in pairs(self.meta) do meta[k] = v end
+    meta.__index = obj
+    meta.super = self
+    obj.meta = meta
+    return obj
 end
 
 --------------------------------------------------------------------------------
@@ -136,148 +128,142 @@ core.process = process
 
 -- By default, any error events that are not listened for should throw errors
 function Emitter:missingHandlerType(name, ...)
-  if name == "error" then
-    -- we define catchall error handler
-    if self ~= process then
-      -- if process has an error handler
-      local handlers = rawget(process, "handlers")
-      if handlers and handlers["error"] then
-        -- delegate to process error handler
-        process:emit("error", ..., self)
-      end
+    if name == "error" then
+        -- we define catchall error handler
+        if self ~= process then
+            -- if process has an error handler
+            local handlers = rawget(process, "handlers")
+            if handlers and handlers["error"] then
+                -- delegate to process error handler
+                process:emit("error", ..., self)
+            end
+        end
     end
-  end
 end
 
 local onceMeta = {}
 function onceMeta:__call(...)
-  self.emitter:removeListener(self.name, self)
-  return self.callback(...)
+    self.emitter:removeListener(self.name, self)
+    return self.callback(...)
 end
 
 -- Same as `Emitter:on` except it de-registers itself after the first event.
 function Emitter:once(name, callback)
-  return self:on(name, setmetatable({
-    emitter = self,
-    name = name,
-    callback = callback
-  }, onceMeta))
+    return self:on(name, setmetatable({
+        emitter = self,
+        name = name,
+        callback = callback
+    }, onceMeta))
 end
 
 -- Adds an event listener (`callback`) for the named event `name`.
 function Emitter:on(name, callback)
-  local handlers = rawget(self, "handlers")
-  if not handlers then
-    handlers = {}
-    rawset(self, "handlers", handlers)
-  end
-  local handlers_for_type = rawget(handlers, name)
-  if not handlers_for_type then
-    if self.addHandlerType then
-      self:addHandlerType(name)
+    local handlers = rawget(self, "handlers")
+    if not handlers then
+        handlers = {}
+        rawset(self, "handlers", handlers)
     end
-    handlers_for_type = {}
-    rawset(handlers, name, handlers_for_type)
-  end
-  table.insert(handlers_for_type, callback)
-  return self
+    local handlers_for_type = rawget(handlers, name)
+    if not handlers_for_type then
+        if self.addHandlerType then self:addHandlerType(name) end
+        handlers_for_type = {}
+        rawset(handlers, name, handlers_for_type)
+    end
+    table.insert(handlers_for_type, callback)
+    return self
 end
 
 function Emitter:listenerCount(name)
-  local handlers = rawget(self, "handlers")
-  if not handlers then
-    return 0
-  end
-  local handlers_for_type = rawget(handlers, name)
-  if not handlers_for_type then
-    return 0
-  else
-    local count = 0
-    for i = 1, #handlers_for_type do
-      if handlers_for_type[i] then
-        count = count + 1
-      end
+    local handlers = rawget(self, "handlers")
+    if not handlers then return 0 end
+    local handlers_for_type = rawget(handlers, name)
+    if not handlers_for_type then
+        return 0
+    else
+        local count = 0
+        for i = 1, #handlers_for_type do
+            if handlers_for_type[i] then count = count + 1 end
+        end
+        return count
     end
-    return count
-  end
 end
 
 -- Emit a named event to all listeners with optional data argument(s).
 function Emitter:emit(name, ...)
-  local handlers = rawget(self, "handlers")
-  if not handlers then
-    self:missingHandlerType(name, ...)
-    return
-  end
-  local handlers_for_type = rawget(handlers, name)
-  if not handlers_for_type then
-    self:missingHandlerType(name, ...)
-    return
-  end
-  for i = 1, #handlers_for_type do
-    local handler = handlers_for_type[i]
-    if handler then handler(...) end
-  end
-  for i = #handlers_for_type, 1, -1 do
-    if not handlers_for_type[i] then
-      table.remove(handlers_for_type, i)
+    local handlers = rawget(self, "handlers")
+    if not handlers then
+        self:missingHandlerType(name, ...)
+        return
     end
-  end
-  return self
+    local handlers_for_type = rawget(handlers, name)
+    if not handlers_for_type then
+        self:missingHandlerType(name, ...)
+        return
+    end
+    for i = 1, #handlers_for_type do
+        local handler = handlers_for_type[i]
+        if handler then handler(...) end
+    end
+    for i = #handlers_for_type, 1, -1 do
+        if not handlers_for_type[i] then
+            table.remove(handlers_for_type, i)
+        end
+    end
+    return self
 end
 
 -- Remove a listener so that it no longer catches events.
 -- Returns the number of listeners removed, or nil if none were removed
 function Emitter:removeListener(name, callback)
-  local num_removed = 0
-  local handlers = rawget(self, "handlers")
-  if not handlers then return end
-  local handlers_for_type = rawget(handlers, name)
-  if not handlers_for_type then return end
-  if callback then
-    for i = #handlers_for_type, 1, -1 do
-      local h = handlers_for_type[i]
-      if type(h) == "function" then
-        h = h == callback
-      elseif type(h) == "table" then
-        h = h == callback or h.callback == callback
-      end
-      if h then
-        handlers_for_type[i] = false
-        num_removed = num_removed + 1
-      end
+    local num_removed = 0
+    local handlers = rawget(self, "handlers")
+    if not handlers then return end
+    local handlers_for_type = rawget(handlers, name)
+    if not handlers_for_type then return end
+    if callback then
+        for i = #handlers_for_type, 1, -1 do
+            local h = handlers_for_type[i]
+            if type(h) == "function" then
+                h = h == callback
+            elseif type(h) == "table" then
+                h = h == callback or h.callback == callback
+            end
+            if h then
+                handlers_for_type[i] = false
+                num_removed = num_removed + 1
+            end
+        end
+    else
+        for i = #handlers_for_type, 1, -1 do
+            handlers_for_type[i] = false
+            num_removed = num_removed + 1
+        end
     end
-  else
-    for i = #handlers_for_type, 1, -1 do
-      handlers_for_type[i] = false
-      num_removed = num_removed + 1
-    end
-  end
-  return num_removed > 0 and num_removed or nil
+    return num_removed > 0 and num_removed or nil
 end
 
 -- Remove all listeners
 --  @param {String?} name optional event name
 function Emitter:removeAllListeners(name)
-  local handlers = rawget(self, "handlers")
-  if not handlers then return end
-  if name then
-    local handlers_for_type = rawget(handlers, name)
-    if handlers_for_type then
-      for i = #handlers_for_type, 1, -1 do
-          handlers_for_type[i] = false
-      end
+    local handlers = rawget(self, "handlers")
+    if not handlers then return end
+    if name then
+        local handlers_for_type = rawget(handlers, name)
+        if handlers_for_type then
+            for i = #handlers_for_type, 1, -1 do
+                handlers_for_type[i] = false
+            end
+        end
+    else
+        rawset(self, "handlers", {})
     end
-  else
-    rawset(self, "handlers", {})
-  end
 end
 
 -- Get listeners
 --  @param {String} name event name
 function Emitter:listeners(name)
-  local handlers = rawget(self, "handlers")
-  return handlers and (rawget(handlers, name) or {}) or {}
+    local handlers = rawget(self, "handlers")
+    return handlers and (rawget(handlers, name) or {}) or {}
 end
 
 --[[
@@ -295,21 +281,21 @@ first argument (`err`) is re-routed to the "error" event instead.
     end
 ]]
 function Emitter:wrap(name)
-  local fn = self[name]
-  self[name] = function (err, ...)
-    if (err) then return self:emit("error", err) end
-    return fn(self, ...)
-  end
+    local fn = self[name]
+    self[name] = function(err, ...)
+        if (err) then return self:emit("error", err) end
+        return fn(self, ...)
+    end
 end
 
 -- Propagate the event to another emitter.
 function Emitter:propagate(eventName, target)
-  if (target and target.emit) then
-    self:on(eventName, function (...) target:emit(eventName, ...) end)
-    return target
-  end
+    if (target and target.emit) then
+        self:on(eventName, function(...) target:emit(eventName, ...) end)
+        return target
+    end
 
-  return self
+    return self
 end
 
 --------------------------------------------------------------------------------
@@ -319,15 +305,11 @@ local Error = Object:extend()
 core.Error = Error
 
 -- Make errors tostringable
-function Error.meta.__tostring(table)
-  return table.message
-end
+function Error.meta.__tostring(table) return table.message end
 
 function Error:initialize(message)
-  self.message = message
-  if message then
-    self.code = tonumber(message:match('([^:]+): '))
-  end
+    self.message = message
+    if message then self.code = tonumber(message:match('([^:]+): ')) end
 end
 
 --------------------------------------------------------------------------------

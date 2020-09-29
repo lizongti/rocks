@@ -12,13 +12,9 @@ local function on(self, _type, listener)
             local signal = uv.new_signal()
             signalWraps[_type] = signal
             uv.unref(signal)
-            uv.signal_start(
-                signal,
-                _type,
-                function()
-                    self:emit(_type)
-                end
-            )
+            uv.signal_start(signal, _type, function()
+                self:emit(_type)
+            end)
         end
         signalListeners[_type] = (signalListeners[_type] or 0) + 1
         Emitter.on(self, _type, listener)
@@ -30,13 +26,9 @@ local function removeListener(self, _type, listener)
         return Emitter.removeListener(self, _type, listener)
     else
         local signal = signalWraps[_type]
-        if not signal then
-            return
-        end
+        if not signal then return end
         local num_removed = Emitter.removeListener(self, _type, listener)
-        if not num_removed then
-            return
-        end
+        if not num_removed then return end
         signalListeners[_type] = signalListeners[_type] - num_removed
         -- close the signal if there are no more listeners left
         if signalListeners[_type] == 0 then
@@ -49,7 +41,4 @@ local function removeListener(self, _type, listener)
     end
 end
 
-return {
-    on = on,
-    removeListener = removeListener,
-}
+return {on = on, removeListener = removeListener}

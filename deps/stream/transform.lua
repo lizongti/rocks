@@ -1,21 +1,4 @@
 --[[
-
-Copyright 2014 The Luvit Authors. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS-IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
---]]
---[[
 // a transform stream is a readable/writable stream where you do
 // something with the data.  Sometimes it's called a "filter",
 // but that's not a great name for it, since that implies a thing where
@@ -57,8 +40,7 @@ limitations under the License.
 // However, even in such a pathological case, only a single written chunk
 // would be consumed, and then the rest would wait (un-transformed) until
 // the results of the previous transformed chunk were consumed.
---]]
-local Duplex = require("stream/duplex").Duplex
+--]] local Duplex = require("stream/duplex").Duplex
 local core = require("core")
 local Error = core.Error
 
@@ -69,89 +51,78 @@ local TransformState = core.Object:extend()
 local afterTransform, done
 
 function TransformState:initialize(_, stream)
-  self.afterTransform = function(er, data)
-    return afterTransform(stream, er, data)
-  end
+    self.afterTransform = function(er, data)
+        return afterTransform(stream, er, data)
+    end
 
-  self.needTransform = false
-  self.transforming = false
-  self.writecb = nil
-  self.writechunk = nil
+    self.needTransform = false
+    self.transforming = false
+    self.writecb = nil
+    self.writechunk = nil
 end
 
 function afterTransform(stream, er, data)
-  local ts = stream._transformState
-  ts.transforming = false
+    local ts = stream._transformState
+    ts.transforming = false
 
-  local cb = ts.writecb
+    local cb = ts.writecb
 
-  if not cb then
-    return stream:emit("error", Error:new("no writecb in Transform class"))
-  end
+    if not cb then
+        return stream:emit("error", Error:new("no writecb in Transform class"))
+    end
 
-  ts.writechunk = nil
-  ts.writecb = nil
+    ts.writechunk = nil
+    ts.writecb = nil
 
-  if data then
-    stream:push(data)
-  end
+    if data then stream:push(data) end
 
-  if cb then
-    cb(er)
-  end
+    if cb then cb(er) end
 
-  local rs = stream._readableState
-  rs.reading = false
-  if rs.needReadable or rs.length < rs.highWaterMark then
-    stream:_read(rs.highWaterMark)
-  end
+    local rs = stream._readableState
+    rs.reading = false
+    if rs.needReadable or rs.length < rs.highWaterMark then
+        stream:_read(rs.highWaterMark)
+    end
 end
 
 function Transform:initialize(options)
-  --[[
+    --[[
   if (!(this instanceof Transform))
     return new Transform(options)
   --]]
-  Duplex.initialize(self, options)
+    Duplex.initialize(self, options)
 
-  self._transformState = TransformState:new(options, self)
+    self._transformState = TransformState:new(options, self)
 
-  --[[
+    --[[
   // when the writable side finishes, then flush out anything remaining.
   --]]
-  local stream = self
+    local stream = self
 
-  --[[
+    --[[
   // start out asking for a readable event once data is transformed.
   --]]
-  self._readableState.needReadable = true
+    self._readableState.needReadable = true
 
-  --[[
+    --[[
   // we have implemented the _read method, and done the other things
   // that Readable wants before the first _read call, so unset the
   // sync guard flag.
   --]]
-  self._readableState.sync = false
+    self._readableState.sync = false
 
-  self:once(
-    "prefinish",
-    function()
-      if type(self._flush) == "function" then
-        self._flush(
-          function(er)
-            done(stream, er)
-          end
-        )
-      else
-        done(stream)
-      end
-    end
-  )
+    self:once("prefinish", function()
+        if type(self._flush) == "function" then
+            self._flush(function(er) done(stream, er) end)
+        else
+            done(stream)
+        end
+    end)
 end
 
 function Transform:push(chunk)
-  self._transformState.needTransform = false
-  return Duplex.push(self, chunk)
+    self._transformState.needTransform = false
+    return Duplex.push(self, chunk)
 end
 
 --[[
@@ -167,19 +138,19 @@ end
 // never call cb(), then you'll never get another chunk.
 --]]
 function Transform:_transform(chunk, cb)
-  error("not implemented"..self..chunk..cb)
+    error("not implemented" .. self .. chunk .. cb)
 end
 
 function Transform:_write(chunk, cb)
-  local ts = self._transformState
-  ts.writecb = cb
-  ts.writechunk = chunk
-  if not ts.transforming then
-    local rs = self._readableState
-    if ts.needTransform or rs.needReadable or rs.length < rs.highWaterMark then
-      self:_read(rs.highWaterMark)
+    local ts = self._transformState
+    ts.writecb = cb
+    ts.writechunk = chunk
+    if not ts.transforming then
+        local rs = self._readableState
+        if ts.needTransform or rs.needReadable or rs.length < rs.highWaterMark then
+            self:_read(rs.highWaterMark)
+        end
     end
-  end
 end
 
 --[[
@@ -188,41 +159,39 @@ end
 // That we got here means that the readable side wants more data.
 --]]
 function Transform:_read(_) -- unused args [n]
-  local ts = self._transformState
+    local ts = self._transformState
 
-  if ts.writechunk ~= nil and ts.writecb and not ts.transforming then
-    ts.transforming = true
-    self:_transform(ts.writechunk, ts.afterTransform)
-  else
-    --[[
+    if ts.writechunk ~= nil and ts.writecb and not ts.transforming then
+        ts.transforming = true
+        self:_transform(ts.writechunk, ts.afterTransform)
+    else
+        --[[
     // mark that we need a transform, so that any data that comes in
     // will get processed, now that we've asked for it.
     --]]
-    ts.needTransform = true
-  end
+        ts.needTransform = true
+    end
 end
 
 function done(stream, er)
-  if er then
-    return stream:emit("error", er)
-  end
+    if er then return stream:emit("error", er) end
 
-  --[[
+    --[[
   // if there's nothing in the write buffer, then that means
   // that nothing more will ever be provided
   --]]
-  local ws = stream._writableState
-  local ts = stream._transformState
+    local ws = stream._writableState
+    local ts = stream._transformState
 
-  if ws.length ~= 0 then
-    error("calling transform done when ws.length != 0")
-  end
+    if ws.length ~= 0 then
+        error("calling transform done when ws.length != 0")
+    end
 
-  if ts.transforming then
-    error("calling transform done when still transforming")
-  end
+    if ts.transforming then
+        error("calling transform done when still transforming")
+    end
 
-  return stream:push(nil)
+    return stream:push(nil)
 end
 
 return {Transform = Transform}

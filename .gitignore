@@ -1,9 +1,2 @@
 
-.DS_Store
-logic
-.vscode/settings.json
-*.ipch
-*.bin
-*.bin
-*.bin
-*.ipch
+*.o

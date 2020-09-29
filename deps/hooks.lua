@@ -1,7 +1,5 @@
 local Emitter = require("core").Emitter
-local e =  {}
+local e = {}
 setmetatable(e, Emitter.meta)
-if e.init then
-    e:init()
-end
+if e.init then e:init() end
 return e

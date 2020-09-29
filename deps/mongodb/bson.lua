@@ -8,7 +8,6 @@ local t_insert = table.insert
 local t_concat = table.concat
 local strbyte = string.byte
 
-
 local function toLSB(bytes, value)
     local str = ""
     for j = 1, bytes do
@@ -23,29 +22,15 @@ local function getTime()
     return tonumber(tv_sec) * 1000 + tonumber(tv_usec / 1000)
 end
 
-local function toLSB32(value)
-    return toLSB(4, value)
-end
-local function toLSB64(value)
-    return toLSB(8, value)
-end
-local function to_int32(n, v)
-    return "\016" .. n .. "\000" .. toLSB32(v)
-end
-local function to_int64(n, v)
-    return "\018" .. n .. "\000" .. toLSB64(v)
-end
-local function to_date(n, v)
-    return "\09" .. n .. "\000" .. toLSB64(v)
-end
+local function toLSB32(value) return toLSB(4, value) end
+local function toLSB64(value) return toLSB(8, value) end
+local function to_int32(n, v) return "\016" .. n .. "\000" .. toLSB32(v) end
+local function to_int64(n, v) return "\018" .. n .. "\000" .. toLSB64(v) end
+local function to_date(n, v) return "\09" .. n .. "\000" .. toLSB64(v) end
 
 local bit64_meta = {
-    __tonumber = function(obj)
-        return obj.value
-    end,
-    __tostring = function(obj)
-        return tostring(obj.value)
-    end,
+    __tonumber = function(obj) return obj.value end,
+    __tostring = function(obj) return tostring(obj.value) end,
     __eq = function(a, b)
         return getmetatable(a) == getmetatable(b) and a.value == b.value
     end,
@@ -53,12 +38,8 @@ local bit64_meta = {
 }
 
 local bit32_meta = {
-    __tonumber = function(obj)
-        return obj.value
-    end,
-    __tostring = function(obj)
-        return tostring(obj.value)
-    end,
+    __tonumber = function(obj) return obj.value end,
+    __tostring = function(obj) return tostring(obj.value) end,
     __eq = function(a, b)
         return getmetatable(a) == getmetatable(b) and a.value == b.value
     end,
@@ -66,32 +47,22 @@ local bit32_meta = {
 }
 
 local date_meta = {
-    __tonumber = function(obj)
-        return obj.value
-    end,
-    __tostring = function(obj)
-        return tostring(obj.value)
-    end,
+    __tonumber = function(obj) return obj.value end,
+    __tostring = function(obj) return tostring(obj.value) end,
     eq = function(a, b)
         return getmetatable(a) == getmetatable(b) and a.value == b.value
     end,
     metatype = "date"
 }
 
-function Bit64(value)
-    return setmetatable({value = value}, bit64_meta)
-end
+function Bit64(value) return setmetatable({value = value}, bit64_meta) end
 
-function Bit32(value)
-    return setmetatable({value = value}, bit32_meta)
-end
+function Bit32(value) return setmetatable({value = value}, bit32_meta) end
 
 function Date(value)
     value = value or getTime()
     value = tonumber(value)
-    if #tostring(value) < 13 then
-        value = value * 1000
-    end
+    if #tostring(value) < 13 then value = value * 1000 end
     return setmetatable({value = value}, date_meta)
 end
 
@@ -117,9 +88,7 @@ local function read_document(get, numerical)
     local t = {}
     while true do
         local op = get(1)
-        if op == "\0" then
-            break
-        end
+        if op == "\0" then break end
         local e_name = read_terminated_string(get)
         local v
         if op == "\1" then -- Double
@@ -138,9 +107,7 @@ local function read_document(get, numerical)
             v = get(len)
         elseif op == "\7" then -- ObjectId
             v = new_object_id(get(12))
-            if _G.usePureObjectId == true then
-                v = tostring(v)
-            end
+            if _G.usePureObjectId == true then v = tostring(v) end
         elseif op == "\8" then -- false
             local f = get(1)
             if f == "\0" then
@@ -159,9 +126,9 @@ local function read_document(get, numerical)
             end
         elseif op == "\10" then -- Null
             v = nil
-        elseif op == "\16" then --int32
+        elseif op == "\16" then -- int32
             v = le_int_to_num(get(4), 1, 4)
-        elseif op == "\18" then --int64
+        elseif op == "\18" then -- int64
             v = le_int_to_num(get(8), 1, 8)
         else
             error("Unknown BSON type " .. strbyte(op))
@@ -187,9 +154,7 @@ local function read_document(get, numerical)
 
     if not ho and hk and hv then
         t = {}
-        for i = 1, #hk do
-            t[hk[i]] = hv[i]
-        end
+        for i = 1, #hk do t[hk[i]] = hv[i] end
     end
 
     return t
@@ -272,9 +237,7 @@ function to_bson(ob)
                 onlyarray = false
             end
         end
-        if not onlyarray and not onlystring then
-            break
-        end
+        if not onlyarray and not onlystring then break end
         i = i + 1
     end
     -- for empty table, we consider it as array, rather than object
@@ -286,9 +249,7 @@ function to_bson(ob)
     local retarray, m = false, nil
     if onlystring then -- Do string first so the case of an empty table is done properly
         local r = {}
-        for k, v in pairs(ob) do
-            t_insert(r, pack(k, v))
-        end
+        for k, v in pairs(ob) do t_insert(r, pack(k, v)) end
         m = t_concat(r)
     elseif onlyarray then
         local r = {}
@@ -310,15 +271,11 @@ function to_bson(ob)
                     t_insert(r, pack(v[2], v[3]))
                 end
             end
-            if isEmpty then
-                retarray = true
-            end
+            if isEmpty then retarray = true end
             m = t_concat(r)
         else
             -- for mongo internal, array start from 0 index
-            for i = 0, high_n - 1 do
-                r[i] = pack(i, seen_n[i])
-            end
+            for i = 0, high_n - 1 do r[i] = pack(i, seen_n[i]) end
 
             -- print('low, high_n', low, high_n)
             m = t_concat(r, "", low, high_n - 1)
