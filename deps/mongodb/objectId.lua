@@ -3,7 +3,6 @@
 -- Created at: 15/6/20 下午2:39
 -- Email: houshoushuai@gmail.com
 --
-
 local setmetatable = setmetatable
 local strbyte, strchar = string.byte, string.char
 local strformat = string.format
@@ -24,12 +23,10 @@ local object_id_mt = {
         end
         return t_concat(t)
     end,
-    __eq = function(a, b)
-        return a.id == b.id
-    end
+    __eq = function(a, b) return a.id == b.id end
 }
 
-local machineid = md5.sumhexa(uv.os_gethostname()):sub(1,3)
+local machineid = md5.sumhexa(uv.os_gethostname()):sub(1, 3)
 
 local pid = uv.getpid()
 pid = num_to_le_uint(pid, 2)
@@ -38,7 +35,8 @@ local inc = math.floor(math.random() * 1000)
 local function generate_id()
     inc = inc + 1
     -- "A BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch), a 3-byte machine id, a 2-byte process id, and a 3-byte counter. Note that the timestamp and counter fields must be stored big endian unlike the rest of BSON"
-    return num_to_be_uint(os.time(), 4) .. machineid .. pid .. num_to_be_uint(inc, 3)
+    return num_to_be_uint(os.time(), 4) .. machineid .. pid ..
+               num_to_be_uint(inc, 3)
 end
 
 local function new_object_id(str)
@@ -76,8 +74,4 @@ local function makeObjectId(str)
     end
 end
 
-return {
-    ObjectId = makeObjectId,
-    new = makeObjectId,
-    metatable = object_id_mt
-}
+return {ObjectId = makeObjectId, new = makeObjectId, metatable = object_id_mt}

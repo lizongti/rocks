@@ -1,0 +1,10 @@
+{
+    "Lua.runtime.version": "Lua 5.1",
+    "Lua.diagnostics.disable": [],
+    "lua.debug.settings.console": "internalConsole",
+    "lua.debug.settings.consoleCoding": "utf8",
+    "lua.debug.settings.luaArch": "x86_64",
+    "lua.debug.settings.luaVersion": "5.1",
+    "lua.debug.settings.sourceCoding": "utf8",
+    "editor.formatOnSave": true,
+}

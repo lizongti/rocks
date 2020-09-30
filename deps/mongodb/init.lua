@@ -21,7 +21,7 @@ function Mongo:initialize(options)
     options = options or {}
     self.options = options
     _id = _id + 1
-    p("[Info] - Create connection.......")
+    p("Mongodb create connection.......")
     self.port = options.port or 27017
     self.host = options.host or "127.0.0.1"
     assert(options.db or options.dbname, "Should specify a database name.")
@@ -81,9 +81,7 @@ local function parseData(data)
     tags.ShardConfigStale = le_bpeek(responseFlags, 2)
     tags.AwaitCapable = le_bpeek(responseFlags, 3)
     local res = {}
-    for i = 1, tags.numberReturned do
-        res[i + offset_i] = from_bson(get)
-    end
+    for i = 1, tags.numberReturned do res[i + offset_i] = from_bson(get) end
     return resId, cursorId, res, tags, length, reqId
 end
 
@@ -97,9 +95,7 @@ function Mongo:command(opcode, message, callback, collection, query)
         ["opcode"] = opcode,
         ["query"] = query,
         ["collection"] = collection,
-        ["callback"] = (callback or function()
-                p("-------")
-            end)
+        ["callback"] = (callback or function() p("-------") end)
     }
     local currentQueue = self.queues[requestId]
     self.socket:write(currentQueue["message"], "hex")
@@ -108,58 +104,42 @@ function Mongo:command(opcode, message, callback, collection, query)
     if opcode == "UPDATE" or opcode == "INSERT" or opcode == "DELETE" then
         local query = currentQueue.query
         local collection = currentQueue.collection
-        self:getLastError(
-            function(error)
-                if error then
-                    currentQueue.callback(error)
+        self:getLastError(function(error)
+            if error then
+                currentQueue.callback(error)
+                self.queues[requestId] = nil
+            else
+                self:find(collection, query, nil, nil, nil,
+                          function(err, result)
+                    currentQueue.callback(nil, result)
                     self.queues[requestId] = nil
-                else
-                    self:find(
-                        collection,
-                        query,
-                        nil,
-                        nil,
-                        nil,
-                        function(err, result)
-                            currentQueue.callback(nil, result)
-                            self.queues[requestId] = nil
-                        end
-                    )
-                end
+                end)
             end
-        )
+        end)
     end
 end
 
 function Mongo:getLastError(cb)
-    self:query(
-        "$cmd",
-        {getLastError = true},
-        nil,
-        nil,
-        1,
-        function(err, res)
-            if res[1].err or res[1]["errmsg"] then
-                cb(res[1])
-            else
-                cb()
-            end
-        end,
-        nil
-    )
+    self:query("$cmd", {getLastError = true}, nil, nil, 1, function(err, res)
+        if res[1].err or res[1]["errmsg"] then
+            cb(res[1])
+        else
+            cb()
+        end
+    end, nil)
 end
 
 function Mongo:query(collection, query, fields, skip, limit, callback, options)
     skip = skip or 0
     local flags = 0
     if options then
-        flags =
-            2 ^ 1 * (options.TailableCursor and 1 or 0) + 2 ^ 2 * (options.SlaveOk and 1 or 0) +
-            2 ^ 3 * (options.OplogReplay and 1 or 0) +
-            2 ^ 4 * (options.NoCursorTimeout and 1 or 0) +
-            2 ^ 5 * (options.AwaitData and 1 or 0) +
-            2 ^ 6 * (options.Exhaust and 1 or 0) +
-            2 ^ 7 * (options.Partial and 1 or 0)
+        flags = 2 ^ 1 * (options.TailableCursor and 1 or 0) + 2 ^ 2 *
+                    (options.SlaveOk and 1 or 0) + 2 ^ 3 *
+                    (options.OplogReplay and 1 or 0) + 2 ^ 4 *
+                    (options.NoCursorTimeout and 1 or 0) + 2 ^ 5 *
+                    (options.AwaitData and 1 or 0) + 2 ^ 6 *
+                    (options.Exhaust and 1 or 0) + 2 ^ 7 *
+                    (options.Partial and 1 or 0)
     end
     query = to_bson(query)
     if fields then
@@ -167,9 +147,9 @@ function Mongo:query(collection, query, fields, skip, limit, callback, options)
     else
         fields = ""
     end
-    local m =
-        num_to_le_uint(flags) ..
-        getCollectionName(self, collection) .. num_to_le_uint(skip) .. num_to_le_int(limit or 0) .. query .. fields
+    local m = num_to_le_uint(flags) .. getCollectionName(self, collection) ..
+                  num_to_le_uint(skip) .. num_to_le_int(limit or 0) .. query ..
+                  fields
     self:command("QUERY", m, callback)
 end
 
@@ -177,26 +157,24 @@ function Mongo:update(collection, query, update, upsert, single, callback)
     local flags = 2 ^ 0 * (upsert and 1 or 0) + 2 ^ 1 * (single and 0 or 1)
     local queryBson = to_bson(query)
     update = to_bson(update)
-    local m = "\0\0\0\0" .. getCollectionName(self, collection) .. num_to_le_uint(flags) .. queryBson .. update
+    local m = "\0\0\0\0" .. getCollectionName(self, collection) ..
+                  num_to_le_uint(flags) .. queryBson .. update
     self:command("UPDATE", m, callback, collection, query)
 end
 
 function Mongo:insert(collection, docs, continue, callback)
-    if not (#docs >= 1) and docs then
-        docs = {docs}
-    end
+    if not (#docs >= 1) and docs then docs = {docs} end
     assert(#docs >= 1)
     local flags = 2 ^ 0 * (continue and 1 or 0)
     local t = {}
     local ids = {}
     for i, v in ipairs(docs) do
-        if not v._id then
-            v._id = ObjectId.new()
-        end
+        if not v._id then v._id = ObjectId.new() end
         table.insert(ids, v._id)
         t[i] = to_bson(v)
     end
-    local m = num_to_le_uint(flags) .. getCollectionName(self, collection) .. table.concat(t)
+    local m = num_to_le_uint(flags) .. getCollectionName(self, collection) ..
+                  table.concat(t)
 
     local query = {_id = {["$in"] = ids}}
 
@@ -206,7 +184,8 @@ end
 function Mongo:remove(collection, query, singleRemove, callback)
     local flags = 2 ^ 0 * (singleRemove and 1 or 0)
     local queryBson = to_bson(query)
-    local m = "\0\0\0\0" .. getCollectionName(self, collection) .. num_to_le_uint(flags) .. queryBson
+    local m = "\0\0\0\0" .. getCollectionName(self, collection) ..
+                  num_to_le_uint(flags) .. queryBson
     self:command("DELETE", m, callback, collection, query)
 end
 
@@ -226,9 +205,7 @@ function Mongo:find(collection, query, fields, skip, limit, callback)
 end
 
 function Mongo:count(collection, query, callback)
-    local function cb(err, r)
-        callback(err, #r)
-    end
+    local function cb(err, r) callback(err, #r) end
     self:query(collection, query, nil, nil, nil, cb)
 end
 
@@ -240,15 +217,10 @@ function Mongo:_onData(data)
         stringToParse = data
     end
 
-    local status, docLength =
-        pcall(
-        function()
-            return parseMsgHeader(stringToParse)
-        end
-    )
-    if not status then
-        return
-    end
+    local status, docLength = pcall(function()
+        return parseMsgHeader(stringToParse)
+    end)
+    if not status then return end
 
     if docLength == #stringToParse then
         local reqId, cursorId, res, tags = parseData(stringToParse)
@@ -267,56 +239,37 @@ function Mongo:_onData(data)
     end
 end
 
-
-
 function Mongo:connect()
     local socket
     socket = net.createConnection(self.port, self.host)
-    socket:on(
-        "connect",
-        function()
-            p("[Info] - Database is connected.......")
-            self.tempData = ""
+    socket:on("connect", function()
+        p("Mongodb database is connected.......")
+        self.tempData = ""
 
-            local a = function(data)
-                self:_onData(data)
-            end
+        local a = function(data) self:_onData(data) end
 
-            socket:on(
-                "data",
-                a
-            )
+        socket:on("data", a)
 
-            socket:on(
-                "end",
-                function()
-                    socket:destroy()
-                    self:emit("end")
-                    self:emit("close")
-                    p("client end")
-                end
-            )
+        socket:on("end", function()
+            socket:destroy()
+            self:emit("end")
+            self:emit("close")
+            p("Mongodb client end")
+        end)
 
-            socket:on(
-                "error",
-                function(err)
-                    p("Error!", err)
-                    self:emit("error", err)
-                end
-            )
+        socket:on("error", function(err)
+            p("Mongodb Error!", err)
+            self:emit("error", err)
+        end)
 
-            self:emit("connect")
+        self:emit("connect")
+    end)
+    socket:on("error", function(code)
+        if (code == "ECONNREFUSED") then
+            self:emit("error", code)
+            p("Mongodb database connection failed. ")
         end
-    )
-    socket:on(
-        "error",
-        function(code)
-            if (code == "ECONNREFUSED") then
-                self:emit("error", code)
-                p("Database connection failed. ")
-            end
-        end
-    )
+    end)
     self.socket = socket
 end
 

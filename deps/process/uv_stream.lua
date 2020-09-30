@@ -30,9 +30,7 @@ end
 
 function UvStreamReadable:_read(_) -- unused args [n]
     local function onRead(err, data)
-        if err then
-            return self:emit("error", err)
-        end
+        if err then return self:emit("error", err) end
         self:push(data)
     end
     if not uv.is_active(self.handle) then
@@ -43,5 +41,5 @@ end
 
 return {
     UvStreamWritable = UvStreamWritable,
-    UvStreamReadable = UvStreamReadable,
+    UvStreamReadable = UvStreamReadable
 }

@@ -20,9 +20,7 @@ local MICROS_PER_SEC = 1000000
 -- an argument to get a diff reading
 local function cpuUsage(_, prevValue) -- unused args [self]
     local rusage, err = uv.getrusage()
-    if not rusage then
-        return nil, err
-    end
+    if not rusage then return nil, err end
     local user = MICROS_PER_SEC * rusage.utime.sec + rusage.utime.usec
     local system = MICROS_PER_SEC * rusage.stime.sec + rusage.stime.usec
     if prevValue then
@@ -32,7 +30,4 @@ local function cpuUsage(_, prevValue) -- unused args [self]
     return {user = user, system = system}
 end
 
-return {
-    memoryUsage = memoryUsage,
-    cpuUsage = cpuUsage,
-}
+return {memoryUsage = memoryUsage, cpuUsage = cpuUsage}
